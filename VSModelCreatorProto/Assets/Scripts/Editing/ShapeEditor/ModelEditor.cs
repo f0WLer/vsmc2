@@ -277,6 +277,27 @@ namespace VSMC
             UndoManager.main.CommitTask(genSnowTask);
         }
 
+        public void NameChildrenOfSelected()
+        {
+            if (EditModeManager.main.cEditMode != VSEditMode.Model) return;
+            if (!objectSelector.IsAnySelected())
+            {
+                InfoLogger.main.LogText("Cannot name children - No object selected.");
+                return;
+            }
+
+            ShapeElement parent = objectSelector.GetCurrentlySelected().GetComponent<ShapeElementGameObject>().element;
+            if (parent.Children == null || parent.Children.Length == 0)
+            {
+                InfoLogger.main.LogText("Cannot name children - Selected element has no children.");
+                return;
+            }
+
+            TaskNameChildren nameChildrenTask = new TaskNameChildren(parent);
+            nameChildrenTask.DoTask();
+            UndoManager.main.CommitTask(nameChildrenTask);
+        }
+
         public void ScaleSelected()
         {
             TaskResizeElement resize = new TaskResizeElement(null, true, 2f, false);
