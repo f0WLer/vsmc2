@@ -49,6 +49,16 @@ namespace VSMC
         public float uiControlledSpeedMultiplier = 1f;
         public float shiftControlledSpeedMultiplier = 5f;
 
+        [Header("SpaceMouse / NDOF Settings")]
+        [Tooltip("Overall multiplier applied on top of translation/rotation speed below and the existing shift/UI speed multipliers.")]
+        public float ndofMasterSensitivity = 4f;
+        [Tooltip("World units/second of pan at distFromAnchor == 1 (Orbital mode); scales with current view distance, see ApplyNDOFMotion.")]
+        public float ndofPanSpeed = 1.2f;
+        [Tooltip("Units/second for dolly (Orbital: distFromAnchor: Free: world-space movement).")]
+        public float ndofDollySpeed = 3.5f;
+        [Tooltip("Degrees/second of orbit rotation at full puck deflection.")]
+        public float ndofRotationSpeed = 140f;
+
         public ModelEditor editor;
         InputAction mousePosAction;
 
@@ -175,6 +185,52 @@ namespace VSMC
             }
         }
         
+        //Drives the same pivot/rotation/distance fields mouse navigation uses, so the two stay
+        //interchangeable rather than fighting over separate camera state. All three axis groups apply
+        //unconditionally in one call, which is what makes simultaneous pan+orbit+dolly work.
+        //
+        //Rotation mirrors RMB-drag orbit (turntable-style pitch/yaw) since that's the only rotation
+        //representation this camera has - no roll field exists for mouse orbit to set or clear, so giving
+        //the SpaceMouse one would let it apply a rotation the mouse could never undo. rotation.z is left
+        //unused for that reason.
+        //
+        //Pan scales with distFromAnchor (Orbital only) so a fixed puck deflection covers more world space
+        //when zoomed out and stays fine zoomed in, reusing the existing distance value instead of adding
+        //a separate zoom-scale concept.
+        //
+        //Dolly only ever changes distFromAnchor (Orbital) or moves along view-forward (Free), same as the
+        //scroll wheel already does, so it never touches the pivot.
+        public void ApplyNDOFMotion(Vector3 translation, Vector3 rotation, float deltaTime)
+        {
+            if (deltaTime <= 0f) return;
+            float speedMul = GetTotalSpeedMultiplier() * ndofMasterSensitivity;
+
+            if (rotation.x != 0f || rotation.y != 0f)
+            {
+                rotY = (rotY + rotation.y * ndofRotationSpeed * speedMul * deltaTime) % 360;
+                rotX = Mathf.Clamp(rotX - rotation.x * ndofRotationSpeed * speedMul * deltaTime, minMaxRotX.x, minMaxRotX.y);
+            }
+
+            if (translation.x != 0f || translation.y != 0f)
+            {
+                float panDistanceScale = CurrentCameraMode == CameraMode.Orbital ? Mathf.Max(distFromAnchor, 0.05f) : 1f;
+                cameraAnchorPos -= cameraChild.transform.right * translation.x * ndofPanSpeed * panDistanceScale * speedMul * deltaTime;
+                cameraAnchorPos -= cameraChild.transform.up * translation.y * ndofPanSpeed * panDistanceScale * speedMul * deltaTime;
+            }
+
+            if (translation.z != 0f)
+            {
+                if (CurrentCameraMode == CameraMode.Orbital)
+                {
+                    distFromAnchor = Mathf.Clamp(distFromAnchor - translation.z * ndofDollySpeed * speedMul * deltaTime, minMaxDistance.x, minMaxDistance.y);
+                }
+                else
+                {
+                    cameraAnchorPos += translation.z * ndofDollySpeed * speedMul * (cameraChild.transform.forward) * deltaTime;
+                }
+            }
+        }
+
         public void FocusOnSelected()
         {
             if (ObjectSelector.main.IsAnySelected())
