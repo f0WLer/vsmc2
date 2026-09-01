@@ -193,6 +193,28 @@ namespace VSMC
             UndoManager.main.CommitTask(copyTask);
         }
 
+        /// <summary>
+        /// Mirrors the selected element and its full child subtree across the model origin on the given
+        /// axis, producing an ordinary duplicate rather than a live/linked symmetry.
+        /// </summary>
+        public void MirrorSelectedElement(EnumAxis axis)
+        {
+            if (!objectSelector.IsAnySelected()) return;
+            ShapeElement cElem = objectSelector.GetCurrentlySelected().GetComponent<ShapeElementGameObject>().element;
+            TaskMirrorElement mirrorTask = new TaskMirrorElement(cElem, axis);
+            mirrorTask.DoTask();
+            UndoManager.main.CommitTask(mirrorTask);
+        }
+
+        /// <summary>
+        /// Parameterless wrappers around <see cref="MirrorSelectedElement(EnumAxis)"/> for the Tools menu -
+        /// every other menu button there calls a void, argument-free method, so these keep Mirror on the
+        /// same UnityEvent wiring convention rather than needing an enum-argument persistent call.
+        /// </summary>
+        public void MirrorSelectedElementX() => MirrorSelectedElement(EnumAxis.X);
+        public void MirrorSelectedElementY() => MirrorSelectedElement(EnumAxis.Y);
+        public void MirrorSelectedElementZ() => MirrorSelectedElement(EnumAxis.Z);
+
         public void OpenReparentMenu()
         {
             if (!objectSelector.IsAnySelected()) return;
