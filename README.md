@@ -10,27 +10,11 @@ There is also an [`extended-tools`](https://github.com/f0WLer/vsmc2/tree/extende
 
 ## Custom Feature Branches
 
-### SpaceMouse Support
-
-Adds native **3Dconnexion SpaceMouse / NDOF viewport navigation on Windows**, using Raw Input over the 3Dconnexion SDK.
-
-The viewport controls are intended to feel similar to Blender's SpaceMouse navigation, including simultaneous pan, orbit, and dolly.
-
-**Branch:** [`spacemouse-support`](https://github.com/f0WLer/vsmc2/tree/spacemouse-support)
-
-Clone and try it:
-
-```bash
-git clone -b spacemouse-support https://github.com/f0WLer/vsmc2.git
-```
-
-------
-
 ### Name Children
 
 Adds **Tools > Name Children**.
 
-Automatically renames and sequentially numbers the direct children of the currently selected element (i.e <ParentName>*N*), making larger element hierarchies easier to organize and manage.
+Automatically renames and sequentially numbers the direct children of the currently selected element (i.e "`<ParentName>`*`N`*"), making larger element hierarchies easier to organize and manage.
 
 **Branch:** [`tools-name-children`](https://github.com/f0WLer/vsmc2/tree/tools-name-children)
 
@@ -46,7 +30,7 @@ git clone -b tools-name-children https://github.com/f0WLer/vsmc2.git
 
 Adds true geometric **X/Y/Z mirroring** for an element and its complete child hierarchy.
 
-Unlike the common workaround of parenting geometry to an element at the model origin and rotating it 180°, this performs an actual reflection. This allows asymmetric geometry to proper mirror rather than merely rotating to the opposite side.
+Unlike the common workaround of parenting geometry to an element at the model origin and rotating it 180°, this performs an actual reflection. This allows asymmetric geometry to properly mirror rather than merely rotating to the opposite side.
 
 The mirrored result is an ordinary editable copy of the original hierarchy.
 
@@ -81,6 +65,22 @@ Clone and try it:
 
 ```bash
 git clone -b align-faces https://github.com/f0WLer/vsmc2.git
+```
+
+------
+
+### SpaceMouse Support
+
+Adds native **3Dconnexion SpaceMouse / NDOF viewport navigation on Windows**, using Raw Input over the 3Dconnexion SDK.
+
+The viewport controls are intended to feel similar to Blender's SpaceMouse navigation, including simultaneous pan, orbit, and dolly.
+
+**Branch:** [`spacemouse-support`](https://github.com/f0WLer/vsmc2/tree/spacemouse-support)
+
+Clone and try it:
+
+```bash
+git clone -b spacemouse-support https://github.com/f0WLer/vsmc2.git
 ```
 
 ------
