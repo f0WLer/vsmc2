@@ -35,6 +35,10 @@ namespace VSMC
         AlignFacesState alignFacesState = AlignFacesState.Idle;
         ShapeElement alignFacesSource;
         int alignFacesSourceFace;
+        //The element that actually receives the translation. Equal to alignFacesSource on a normal click
+        //Ctrl-clicking the source face instead points this at the source's immediate parent, so the
+        //whole assembly moves together while the picked child face stays the alignment datum.
+        ShapeElement alignFacesMovementRoot;
 
         private void Start()
         {
@@ -148,6 +152,8 @@ namespace VSMC
         /// <summary>
         /// Tools > Align Faces. No general "currently selected face" concept exists outside Texture mode's
         /// UV-editing UI, so this prompts for both the source and target face after invoking the command.
+        /// Ctrl-clicking the source face uses it as the datum but moves the source's immediate parent
+        /// instead, so the whole assembly can be aligned by one of its child faces.
         /// </summary>
         public void StartAlignFaces()
         {
@@ -163,29 +169,33 @@ namespace VSMC
             if (alignFacesState == AlignFacesState.Idle) return;
             alignFacesState = AlignFacesState.Idle;
             alignFacesSource = null;
+            alignFacesMovementRoot = null;
             objectSelector.CancelFacePicking();
             InfoLogger.main.LogText("Align Faces: cancelled");
         }
 
-        void OnAlignFacesSourcePicked(ShapeElement elem, int faceIndex)
+        void OnAlignFacesSourcePicked(ShapeElement elem, int faceIndex, bool ctrlHeld)
         {
             alignFacesSource = elem;
             alignFacesSourceFace = faceIndex;
+            //Ctrl-click moves the parent assembly instead of just the picked element. With no parent to
+            //move, there's nothing an assembly-level move could mean beyond moving the source itself.
+            alignFacesMovementRoot = (ctrlHeld && elem.ParentElement != null) ? elem.ParentElement : elem;
             alignFacesState = AlignFacesState.WaitingForTarget;
             InfoLogger.main.LogText("Align Faces: select target face");
             objectSelector.BeginFacePicking(OnAlignFacesTargetPicked);
         }
 
-        void OnAlignFacesTargetPicked(ShapeElement targetElem, int targetFace)
+        void OnAlignFacesTargetPicked(ShapeElement targetElem, int targetFace, bool ctrlHeld)
         {
             alignFacesState = AlignFacesState.Idle;
 
-            //Target can't be the source itself or a descendant of it - the source dragging the target
-            //along would make "align A's face to B's face" have no fixed point to solve for. A target
-            //that's an ancestor of the source is fine; only the source moves either way.
-            if (alignFacesSource.GetThisAndAllChildrenRecursively().Any(e => e.elementUID == targetElem.elementUID))
+            //Target can't be the movement root itself or a descendant of it - the root dragging the
+            //target along would make "align A's face to B's face" have no fixed point to solve for. A
+            //target that's an ancestor of the movement root is fine; only the root moves either way.
+            if (alignFacesMovementRoot.GetThisAndAllChildrenRecursively().Any(e => e.elementUID == targetElem.elementUID))
             {
-                InfoLogger.main.LogText("Align Faces: target can't be the source or one of its children");
+                InfoLogger.main.LogText("Align Faces: target can't be the moved element or one of its children");
                 return;
             }
 
@@ -205,20 +215,21 @@ namespace VSMC
             }
 
             //Shifting From and RotationOrigin by the same delta d (below) turns ApplyTransform's
-            //T(origin)*R*T(-origin)*T(From) into T(d) * [that] - the source's own rotation R cancels out
-            //entirely. Only the parent chain's rotation carries into world space, so that's what gets
-            //inverted here; the full model matrix would incorrectly skew the movement on a rotated source.
-            Matrix4x4 sourceParentMatrix = FacePlaneUtil.GetParentModelMatrix(alignFacesSource);
-            sourceParentMatrix.SetColumn(3, new Vector4(0, 0, 0, 1));
-            Vector3 localDelta = sourceParentMatrix.inverse.MultiplyVector(worldTranslation);
+            //T(origin)*R*T(-origin)*T(From) into T(d) * [that] - the moved element's own rotation R
+            //cancels out entirely. Only its parent chain's rotation carries into world space, so that's
+            //what gets inverted here; the full model matrix would incorrectly skew the movement on a
+            //rotated element.
+            Matrix4x4 movementRootParentMatrix = FacePlaneUtil.GetParentModelMatrix(alignFacesMovementRoot);
+            movementRootParentMatrix.SetColumn(3, new Vector4(0, 0, 0, 1));
+            Vector3 localDelta = movementRootParentMatrix.inverse.MultiplyVector(worldTranslation);
 
             TaskAddToElementPosition task = new TaskAddToElementPosition(
-                alignFacesSource, alignFacesSource.From, alignFacesSource.To, alignFacesSource.RotationOrigin,
+                alignFacesMovementRoot, alignFacesMovementRoot.From, alignFacesMovementRoot.To, alignFacesMovementRoot.RotationOrigin,
                 new double[] { localDelta.x, localDelta.y, localDelta.z }, 0, true);
             task.DoTask();
             UndoManager.main.CommitTask(task);
 
-            objectSelector.SelectObject(alignFacesSource.gameObject.gameObject, false, false);
+            objectSelector.SelectObject(alignFacesMovementRoot.gameObject.gameObject, false, false);
             InfoLogger.main.LogText("Align Faces: aligned");
         }
 

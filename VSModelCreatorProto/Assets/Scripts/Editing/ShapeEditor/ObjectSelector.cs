@@ -30,7 +30,8 @@ namespace VSMC
 
         //Set by tools (e.g. Align Faces) that need the next viewport click to pick a face instead of
         //doing normal object selection. Cleared once a face is picked or picking is cancelled.
-        UnityAction<ShapeElement, int> pickFaceCallback;
+        //The bool arg reports whether Ctrl was held for that click, for tools that give it a meaning.
+        UnityAction<ShapeElement, int, bool> pickFaceCallback;
 
         private void Awake()
         {
@@ -118,9 +119,10 @@ namespace VSMC
                     ShapeElementGameObject segObj = hit.collider.gameObject.GetComponent<ShapeElementGameObject>();
                     if (faceFound != -1 && segObj != null)
                     {
-                        UnityAction<ShapeElement, int> callback = pickFaceCallback;
+                        UnityAction<ShapeElement, int, bool> callback = pickFaceCallback;
                         pickFaceCallback = null;
-                        callback(segObj.element, faceFound);
+                        bool ctrlHeld = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+                        callback(segObj.element, faceFound, ctrlHeld);
                     }
                     //A miss leaves picking armed so the user can just try again.
                 }
@@ -176,7 +178,7 @@ namespace VSMC
         /// Arms the next viewport left-click to pick a face instead of doing normal object selection.
         /// Fires once and clears itself, re-arm for a second pick.
         /// </summary>
-        public void BeginFacePicking(UnityAction<ShapeElement, int> onFacePicked)
+        public void BeginFacePicking(UnityAction<ShapeElement, int, bool> onFacePicked)
         {
             pickFaceCallback = onFacePicked;
         }
