@@ -28,6 +28,10 @@ namespace VSMC
         int storedRaycastHitCount;
         int scrollingObjectCounter;
 
+        //Set by tools (e.g. Align Faces) that need the next viewport click to pick a face instead of
+        //doing normal object selection. Cleared once a face is picked or picking is cancelled.
+        UnityAction<ShapeElement, int> pickFaceCallback;
+
         private void Awake()
         {
             main = this;
@@ -102,6 +106,27 @@ namespace VSMC
         public override bool OnSceneViewMouseUp(PointerEventData data)
         {
             if (data.button != 0) return false;
+
+            if (pickFaceCallback != null)
+            {
+                //Consume the click regardless of hit/miss while a tool is waiting on a face pick. Falling
+                //through to normal selection here would deselect/reselect out from under the waiting tool.
+                if (storedRaycastHitCount > 0 && scrollingObjectCounter < storedRaycastHitCount)
+                {
+                    RaycastHit hit = storedRaycastHits[scrollingObjectCounter];
+                    int faceFound = GetFaceIndexFromHitNormal(hit);
+                    ShapeElementGameObject segObj = hit.collider.gameObject.GetComponent<ShapeElementGameObject>();
+                    if (faceFound != -1 && segObj != null)
+                    {
+                        UnityAction<ShapeElement, int> callback = pickFaceCallback;
+                        pickFaceCallback = null;
+                        callback(segObj.element, faceFound);
+                    }
+                    //A miss leaves picking armed so the user can just try again.
+                }
+                return true;
+            }
+
             if (storedRaycastHitCount <= 0)
             {
                 DeselectAll();
@@ -123,15 +148,7 @@ namespace VSMC
                 if (EditModeManager.main.cEditMode == VSEditMode.Texture)
                 {
                     //Select a specific face... based on the *local* normal of the contact point.
-                    Vector3 normal = storedRaycastHits[scrollingObjectCounter].collider.transform.InverseTransformVector(
-                        storedRaycastHits[scrollingObjectCounter].normal);
-                    int faceFound = -1;
-                    if (normal.y < -0.5f) faceFound = (int)FaceEnum.Down;
-                    else if (normal.y > 0.5f) faceFound = (int)FaceEnum.Up;
-                    else if (normal.x < -0.5f) faceFound = (int)FaceEnum.West;
-                    else if (normal.x > 0.5f) faceFound = (int)FaceEnum.East;
-                    else if (normal.z < -0.5f) faceFound = (int)FaceEnum.South;
-                    else if (normal.z > 0.5f) faceFound = (int)FaceEnum.North;
+                    int faceFound = GetFaceIndexFromHitNormal(storedRaycastHits[scrollingObjectCounter]);
                     if (faceFound != -1)
                     {
                         texEditorUIElements.SetOneFaceEnabled(faceFound);
@@ -141,6 +158,32 @@ namespace VSMC
             }
             SelectObject(storedRaycastHits[scrollingObjectCounter].collider.gameObject, true, false);
             return true;
+        }
+
+        static int GetFaceIndexFromHitNormal(RaycastHit hit)
+        {
+            Vector3 normal = hit.collider.transform.InverseTransformVector(hit.normal);
+            if (normal.y < -0.5f) return (int)FaceEnum.Down;
+            if (normal.y > 0.5f) return (int)FaceEnum.Up;
+            if (normal.x < -0.5f) return (int)FaceEnum.West;
+            if (normal.x > 0.5f) return (int)FaceEnum.East;
+            if (normal.z < -0.5f) return (int)FaceEnum.South;
+            if (normal.z > 0.5f) return (int)FaceEnum.North;
+            return -1;
+        }
+
+        /// <summary>
+        /// Arms the next viewport left-click to pick a face instead of doing normal object selection.
+        /// Fires once and clears itself, re-arm for a second pick.
+        /// </summary>
+        public void BeginFacePicking(UnityAction<ShapeElement, int> onFacePicked)
+        {
+            pickFaceCallback = onFacePicked;
+        }
+
+        public void CancelFacePicking()
+        {
+            pickFaceCallback = null;
         }
 
         public void SelectFromUIElement(ElementHierarchyItemPrefab item)

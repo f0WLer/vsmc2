@@ -30,7 +30,11 @@ namespace VSMC
         public TMP_InputField scaleInput;
         public Toggle scaleUVsToggle;
         public Selectable[] scaleButtonsOnlyForSelection;
-        
+
+        enum AlignFacesState { Idle, WaitingForSource, WaitingForTarget }
+        AlignFacesState alignFacesState = AlignFacesState.Idle;
+        ShapeElement alignFacesSource;
+        int alignFacesSourceFace;
 
         private void Start()
         {
@@ -130,6 +134,92 @@ namespace VSMC
         void OnEditModeDeselect(VSEditMode desel)
         {
             if (desel != VSEditMode.Model) return;
+            CancelAlignFaces();
+        }
+
+        void Update()
+        {
+            if (alignFacesState != AlignFacesState.Idle && Input.GetKeyDown(KeyCode.Escape))
+            {
+                CancelAlignFaces();
+            }
+        }
+
+        /// <summary>
+        /// Tools > Align Faces. No general "currently selected face" concept exists outside Texture mode's
+        /// UV-editing UI, so this prompts for both the source and target face after invoking the command.
+        /// </summary>
+        public void StartAlignFaces()
+        {
+            if (EditModeManager.main.cEditMode != VSEditMode.Model) return;
+            CancelAlignFaces();
+            alignFacesState = AlignFacesState.WaitingForSource;
+            InfoLogger.main.LogText("Align Faces: select source face");
+            objectSelector.BeginFacePicking(OnAlignFacesSourcePicked);
+        }
+
+        public void CancelAlignFaces()
+        {
+            if (alignFacesState == AlignFacesState.Idle) return;
+            alignFacesState = AlignFacesState.Idle;
+            alignFacesSource = null;
+            objectSelector.CancelFacePicking();
+            InfoLogger.main.LogText("Align Faces: cancelled");
+        }
+
+        void OnAlignFacesSourcePicked(ShapeElement elem, int faceIndex)
+        {
+            alignFacesSource = elem;
+            alignFacesSourceFace = faceIndex;
+            alignFacesState = AlignFacesState.WaitingForTarget;
+            InfoLogger.main.LogText("Align Faces: select target face");
+            objectSelector.BeginFacePicking(OnAlignFacesTargetPicked);
+        }
+
+        void OnAlignFacesTargetPicked(ShapeElement targetElem, int targetFace)
+        {
+            alignFacesState = AlignFacesState.Idle;
+
+            //Target can't be the source itself or a descendant of it - the source dragging the target
+            //along would make "align A's face to B's face" have no fixed point to solve for. A target
+            //that's an ancestor of the source is fine; only the source moves either way.
+            if (alignFacesSource.GetThisAndAllChildrenRecursively().Any(e => e.elementUID == targetElem.elementUID))
+            {
+                InfoLogger.main.LogText("Align Faces: target can't be the source or one of its children");
+                return;
+            }
+
+            FacePlaneUtil.GetFacePlane(alignFacesSource, alignFacesSourceFace, out Vector3 sourcePoint, out Vector3 sourceNormal);
+            FacePlaneUtil.GetFacePlane(targetElem, targetFace, out Vector3 targetPoint, out Vector3 targetNormal);
+
+            if (!AlignFacesMath.TryComputeTranslation(sourcePoint, sourceNormal, targetPoint, targetNormal, out Vector3 worldTranslation))
+            {
+                InfoLogger.main.LogText("Align Faces: selected faces are not parallel");
+                return;
+            }
+
+            if (AlignFacesMath.IsNegligible(worldTranslation))
+            {
+                InfoLogger.main.LogText("Align Faces: faces are already coplanar");
+                return;
+            }
+
+            //Shifting From and RotationOrigin by the same delta d (below) turns ApplyTransform's
+            //T(origin)*R*T(-origin)*T(From) into T(d) * [that] - the source's own rotation R cancels out
+            //entirely. Only the parent chain's rotation carries into world space, so that's what gets
+            //inverted here; the full model matrix would incorrectly skew the movement on a rotated source.
+            Matrix4x4 sourceParentMatrix = FacePlaneUtil.GetParentModelMatrix(alignFacesSource);
+            sourceParentMatrix.SetColumn(3, new Vector4(0, 0, 0, 1));
+            Vector3 localDelta = sourceParentMatrix.inverse.MultiplyVector(worldTranslation);
+
+            TaskAddToElementPosition task = new TaskAddToElementPosition(
+                alignFacesSource, alignFacesSource.From, alignFacesSource.To, alignFacesSource.RotationOrigin,
+                new double[] { localDelta.x, localDelta.y, localDelta.z }, 0, true);
+            task.DoTask();
+            UndoManager.main.CommitTask(task);
+
+            objectSelector.SelectObject(alignFacesSource.gameObject.gameObject, false, false);
+            InfoLogger.main.LogText("Align Faces: aligned");
         }
 
         public void CreateNewShapeElement()
