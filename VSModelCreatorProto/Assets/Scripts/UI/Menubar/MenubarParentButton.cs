@@ -12,6 +12,9 @@ public class MenubarParentButton : MonoBehaviour
 {
 
     public GameObject menubarChildMenu;
+
+    public bool openOnHover = true;
+
     int menubarButtonIndex = -1;
 
     void Start()
@@ -21,6 +24,8 @@ public class MenubarParentButton : MonoBehaviour
 
         //Adding the click event is quite easy...
         GetComponent<Button>().onClick.AddListener(OnPointerClick);
+
+        if (!openOnHover) return;
 
         //But the pointer enter is more difficult.
         EventTrigger trigger = gameObject.AddComponent<EventTrigger>();

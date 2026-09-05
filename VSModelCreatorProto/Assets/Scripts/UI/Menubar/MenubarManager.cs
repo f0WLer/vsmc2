@@ -82,7 +82,7 @@ public class MenubarManager : MonoBehaviour
     {
         if (cMenubarOpenIndex != -1)
         {
-            CloseAllMenus(false);
+            CloseAllMenus(false, menubarExpandedMenus[menubarIndex]);
             cMenubarOpenIndex = menubarIndex;
             menubarExpandedMenus[cMenubarOpenIndex].SetActive(true);
         }
@@ -90,7 +90,7 @@ public class MenubarManager : MonoBehaviour
 
     public void OnClickButton(int menubarIndex)
     {
-        CloseAllMenus(false);
+        CloseAllMenus(false, menubarExpandedMenus[menubarIndex]);
         if (cMenubarOpenIndex == menubarIndex)
         {
             cMenubarOpenIndex = -1;
@@ -102,10 +102,26 @@ public class MenubarManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Kept as a separate overload rather than an optional parameter - the menu buttons bind to this by
+    /// exact signature as a UnityEvent, which an optional parameter would not satisfy.
+    /// </summary>
     public void CloseAllMenus(bool setIndex)
+    {
+        CloseAllMenus(setIndex, null);
+    }
+
+    /// <summary>
+    /// Closes every registered menu. A menu nested inside another (a flyout submenu) must not close the
+    /// dropdown it lives in when it opens, so <paramref name="keepAncestorsOf"/> spares those.
+    /// </summary>
+    public void CloseAllMenus(bool setIndex, GameObject keepAncestorsOf)
     {
         foreach (GameObject g in menubarExpandedMenus)
         {
+            //IsChildOf counts itself, so the menu being opened is excluded explicitly - otherwise clicking
+            //an open menu's own button could never toggle it closed.
+            if (keepAncestorsOf != null && keepAncestorsOf != g && keepAncestorsOf.transform.IsChildOf(g.transform)) continue;
             g.SetActive(false);
         }
         if (setIndex) cMenubarOpenIndex = -1;
