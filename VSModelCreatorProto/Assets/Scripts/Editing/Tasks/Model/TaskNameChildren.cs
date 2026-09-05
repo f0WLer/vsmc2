@@ -9,33 +9,32 @@ namespace VSMC
     /// </summary>
     public class TaskNameChildren : IEditTask
     {
-        int parentUID;
         int[] childUIDs;
         string[] oldNames;
         string[] newNames;
 
         public TaskNameChildren(ShapeElement parent)
         {
-            parentUID = parent.elementUID;
-
-            ShapeElement[] children = parent.Children ?? new ShapeElement[0];
+            ShapeElement[] children = parent.Children ?? System.Array.Empty<ShapeElement>();
             childUIDs = children.Select(c => c.elementUID).ToArray();
             oldNames = children.Select(c => c.Name).ToArray();
 
             //Names that must not be used as a target - every other element in the shape, excluding the children being renamed.
+            HashSet<int> renamedUIDs = new HashSet<int>(childUIDs);
             HashSet<string> reservedNames = new HashSet<string>(
                 ShapeElementRegistry.main.GetAllShapeElements()
-                    .Where(e => !childUIDs.Contains(e.elementUID))
+                    .Where(e => !renamedUIDs.Contains(e.elementUID))
                     .Select(e => e.Name),
                 System.StringComparer.CurrentCultureIgnoreCase);
 
             newNames = new string[children.Length];
             for (int i = 0; i < children.Length; i++)
             {
+                //Suffixed _1, _2, ... on collision, matching TaskRenameElement's convention.
                 string candidate = parent.Name + (i + 1);
-                while (reservedNames.Contains(candidate))
+                for (int suffix = 1; reservedNames.Contains(candidate); suffix++)
                 {
-                    candidate += "_1";
+                    candidate = parent.Name + (i + 1) + "_" + suffix;
                 }
                 newNames[i] = candidate;
                 reservedNames.Add(candidate);
@@ -44,20 +43,34 @@ namespace VSMC
 
         public override void DoTask()
         {
-            for (int i = 0; i < childUIDs.Length; i++)
-            {
-                RenameElement(childUIDs[i], oldNames[i], newNames[i]);
-            }
-            ShapeLoader.main.shapeHolder.RefreshAllStepparents();
+            ApplyRenames(oldNames, newNames);
         }
 
         public override void UndoTask()
         {
+            ApplyRenames(newNames, oldNames);
+        }
+
+        /// <summary>
+        /// Renames in two passes using temporary unique names to avoid collisions between siblings.
+        /// This also prevents no-op renames, which would remove the element's keyframe entry.
+        /// </summary> 
+        void ApplyRenames(string[] from, string[] to)
+        {
             for (int i = 0; i < childUIDs.Length; i++)
             {
-                RenameElement(childUIDs[i], newNames[i], oldNames[i]);
+                RenameElement(childUIDs[i], from[i], TempNameFor(childUIDs[i]));
+            }
+            for (int i = 0; i < childUIDs.Length; i++)
+            {
+                RenameElement(childUIDs[i], TempNameFor(childUIDs[i]), to[i]);
             }
             ShapeLoader.main.shapeHolder.RefreshAllStepparents();
+        }
+
+        static string TempNameFor(int elemUID)
+        {
+            return "__namechildren_" + elemUID;
         }
 
         void RenameElement(int elemUID, string fromName, string toName)
