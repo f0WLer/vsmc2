@@ -35,9 +35,8 @@ namespace VSMC
         AlignFacesState alignFacesState = AlignFacesState.Idle;
         ShapeElement alignFacesSource;
         int alignFacesSourceFace;
-        //The element that actually receives the translation. Equal to alignFacesSource on a normal click
-        //Ctrl-clicking the source face instead points this at the source's immediate parent, so the
-        //whole assembly moves together while the picked child face stays the alignment datum.
+        //The element that actually receives the translation. Captured from the tree when the tool starts, 
+        //so any descendant's face can act as the alignment datum while the whole assembly moves together.
         ShapeElement alignFacesMovementRoot;
 
         private void Start()
@@ -150,18 +149,34 @@ namespace VSMC
         }
 
         /// <summary>
-        /// Tools > Align Faces. No general "currently selected face" concept exists outside Texture mode's
-        /// UV-editing UI, so this prompts for both the source and target face after invoking the command.
-        /// Ctrl-clicking the source face uses it as the datum but moves the source's immediate parent
-        /// instead, so the whole assembly can be aligned by one of its child faces.
+        /// Selection > Align Faces. No general "currently selected face" concept exists outside Texture
+        /// mode's UV-editing UI, so this prompts for both the source and target face after invoking the
+        /// command. The element selected in the model tree becomes the movement root: the source face may
+        /// belong to any element in its subtree and only acts as the alignment datum, while the
+        /// translation is applied to the root so its whole subtree moves together.
         /// </summary>
         public void StartAlignFaces()
         {
             if (EditModeManager.main.cEditMode != VSEditMode.Model) return;
             CancelAlignFaces();
+            if (!objectSelector.IsAnySelected())
+            {
+                InfoLogger.main.LogText("Align Faces: select the element to move first");
+                return;
+            }
+            alignFacesMovementRoot = objectSelector.GetCurrentlySelected().GetComponent<ShapeElementGameObject>().element;
             alignFacesState = AlignFacesState.WaitingForSource;
-            InfoLogger.main.LogText("Align Faces: select source face");
+            InfoLogger.main.LogText("Align Faces: select source face on '" + alignFacesMovementRoot.Name + "' or one of its children");
             objectSelector.BeginFacePicking(OnAlignFacesSourcePicked);
+        }
+
+        /// <summary>
+        /// Whether the element is the movement root or one of its descendants, i.e. whether it moves when
+        /// the root moves. Source faces must be inside this subtree, target faces must be outside it.
+        /// </summary>
+        bool IsInMovementSubtree(ShapeElement elem)
+        {
+            return alignFacesMovementRoot.GetThisAndAllChildrenRecursively().Any(e => e.elementUID == elem.elementUID);
         }
 
         public void CancelAlignFaces()
@@ -174,26 +189,32 @@ namespace VSMC
             InfoLogger.main.LogText("Align Faces: cancelled");
         }
 
-        void OnAlignFacesSourcePicked(ShapeElement elem, int faceIndex, bool ctrlHeld)
+        void OnAlignFacesSourcePicked(ShapeElement elem, int faceIndex)
         {
+            //A face outside the moved subtree can't act as its datum. Stay in the picking state so the user can retry
+            //rather than having to reinvoke the tool.
+            if (!IsInMovementSubtree(elem))
+            {
+                InfoLogger.main.LogText("Align Faces: source face must be on '" + alignFacesMovementRoot.Name + "' or one of its children");
+                objectSelector.BeginFacePicking(OnAlignFacesSourcePicked);
+                return;
+            }
+
             alignFacesSource = elem;
             alignFacesSourceFace = faceIndex;
-            //Ctrl-click moves the parent assembly instead of just the picked element. With no parent to
-            //move, there's nothing an assembly-level move could mean beyond moving the source itself.
-            alignFacesMovementRoot = (ctrlHeld && elem.ParentElement != null) ? elem.ParentElement : elem;
             alignFacesState = AlignFacesState.WaitingForTarget;
             InfoLogger.main.LogText("Align Faces: select target face");
             objectSelector.BeginFacePicking(OnAlignFacesTargetPicked);
         }
 
-        void OnAlignFacesTargetPicked(ShapeElement targetElem, int targetFace, bool ctrlHeld)
+        void OnAlignFacesTargetPicked(ShapeElement targetElem, int targetFace)
         {
             alignFacesState = AlignFacesState.Idle;
 
             //Target can't be the movement root itself or a descendant of it - the root dragging the
             //target along would make "align A's face to B's face" have no fixed point to solve for. A
             //target that's an ancestor of the movement root is fine; only the root moves either way.
-            if (alignFacesMovementRoot.GetThisAndAllChildrenRecursively().Any(e => e.elementUID == targetElem.elementUID))
+            if (IsInMovementSubtree(targetElem))
             {
                 InfoLogger.main.LogText("Align Faces: target can't be the moved element or one of its children");
                 return;
