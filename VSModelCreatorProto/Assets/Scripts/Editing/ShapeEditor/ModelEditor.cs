@@ -31,12 +31,11 @@ namespace VSMC
         public Toggle scaleUVsToggle;
         public Selectable[] scaleButtonsOnlyForSelection;
 
-        enum AlignFacesState { Idle, WaitingForSource, WaitingForTarget }
-        AlignFacesState alignFacesState = AlignFacesState.Idle;
         ShapeElement alignFacesSource;
         int alignFacesSourceFace;
-        //The element that actually receives the translation. Captured from the tree when the tool starts, 
+        //The element that actually receives the translation, captured from the tree when the tool starts,
         //so any descendant's face can act as the alignment datum while the whole assembly moves together.
+        //Doubles as the tool's active flag - non-null only while a pick is outstanding.
         ShapeElement alignFacesMovementRoot;
 
         private void Start()
@@ -142,7 +141,7 @@ namespace VSMC
 
         void Update()
         {
-            if (alignFacesState != AlignFacesState.Idle && Input.GetKeyDown(KeyCode.Escape))
+            if (alignFacesMovementRoot != null && Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelAlignFaces();
             }
@@ -165,35 +164,43 @@ namespace VSMC
                 return;
             }
             alignFacesMovementRoot = objectSelector.GetCurrentlySelected().GetComponent<ShapeElementGameObject>().element;
-            alignFacesState = AlignFacesState.WaitingForSource;
             InfoLogger.main.LogText("Align Faces: select source face on '" + alignFacesMovementRoot.Name + "' or one of its children");
             objectSelector.BeginFacePicking(OnAlignFacesSourcePicked);
         }
 
         /// <summary>
-        /// Whether the element is the movement root or one of its descendants, i.e. whether it moves when
-        /// the root moves. Source faces must be inside this subtree, target faces must be outside it.
+        /// Whether the element moves when the root moves. Source faces must be inside this subtree, target
+        /// faces must be outside it. Walks up via stepparents as well as parents, matching how
+        /// <see cref="FacePlaneUtil.GetParentModelMatrix"/> resolves the transform chain - a stepchild
+        /// travels with the root, so membership has to agree with the geometry.
         /// </summary>
-        bool IsInMovementSubtree(ShapeElement elem)
+        static bool IsInSubtreeOf(ShapeElement elem, ShapeElement root)
         {
-            return alignFacesMovementRoot.GetThisAndAllChildrenRecursively().Any(e => e.elementUID == elem.elementUID);
+            for (ShapeElement e = elem; e != null; e = e.GetParentOrStepParent())
+            {
+                if (e.elementUID == root.elementUID) return true;
+            }
+            return false;
         }
 
         public void CancelAlignFaces()
         {
-            if (alignFacesState == AlignFacesState.Idle) return;
-            alignFacesState = AlignFacesState.Idle;
+            if (alignFacesMovementRoot == null) return;
+            ResetAlignFaces();
+            InfoLogger.main.LogText("Align Faces: cancelled");
+        }
+
+        void ResetAlignFaces()
+        {
             alignFacesSource = null;
             alignFacesMovementRoot = null;
             objectSelector.CancelFacePicking();
-            InfoLogger.main.LogText("Align Faces: cancelled");
         }
 
         void OnAlignFacesSourcePicked(ShapeElement elem, int faceIndex)
         {
-            //A face outside the moved subtree can't act as its datum. Stay in the picking state so the user can retry
-            //rather than having to reinvoke the tool.
-            if (!IsInMovementSubtree(elem))
+            //Re-arm rather than abort, so a stray pick doesn't cost the user the whole invocation.
+            if (!IsInSubtreeOf(elem, alignFacesMovementRoot))
             {
                 InfoLogger.main.LogText("Align Faces: source face must be on '" + alignFacesMovementRoot.Name + "' or one of its children");
                 objectSelector.BeginFacePicking(OnAlignFacesSourcePicked);
@@ -202,25 +209,28 @@ namespace VSMC
 
             alignFacesSource = elem;
             alignFacesSourceFace = faceIndex;
-            alignFacesState = AlignFacesState.WaitingForTarget;
             InfoLogger.main.LogText("Align Faces: select target face");
             objectSelector.BeginFacePicking(OnAlignFacesTargetPicked);
         }
 
         void OnAlignFacesTargetPicked(ShapeElement targetElem, int targetFace)
         {
-            alignFacesState = AlignFacesState.Idle;
+            ShapeElement movementRoot = alignFacesMovementRoot;
+            ShapeElement source = alignFacesSource;
+            int sourceFace = alignFacesSourceFace;
+            //Reset up front so every early return below leaves the tool idle instead of holding element
+            //references past the end of the operation.
+            ResetAlignFaces();
 
-            //Target can't be the movement root itself or a descendant of it - the root dragging the
-            //target along would make "align A's face to B's face" have no fixed point to solve for. A
-            //target that's an ancestor of the movement root is fine; only the root moves either way.
-            if (IsInMovementSubtree(targetElem))
+            //A target inside the moved subtree travels with it, leaving the alignment no fixed point to
+            //solve for. An ancestor of the root is fine; only the root moves either way.
+            if (IsInSubtreeOf(targetElem, movementRoot))
             {
                 InfoLogger.main.LogText("Align Faces: target can't be the moved element or one of its children");
                 return;
             }
 
-            FacePlaneUtil.GetFacePlane(alignFacesSource, alignFacesSourceFace, out Vector3 sourcePoint, out Vector3 sourceNormal);
+            FacePlaneUtil.GetFacePlane(source, sourceFace, out Vector3 sourcePoint, out Vector3 sourceNormal);
             FacePlaneUtil.GetFacePlane(targetElem, targetFace, out Vector3 targetPoint, out Vector3 targetNormal);
 
             if (!AlignFacesMath.TryComputeTranslation(sourcePoint, sourceNormal, targetPoint, targetNormal, out Vector3 worldTranslation))
@@ -240,17 +250,17 @@ namespace VSMC
             //cancels out entirely. Only its parent chain's rotation carries into world space, so that's
             //what gets inverted here; the full model matrix would incorrectly skew the movement on a
             //rotated element.
-            Matrix4x4 movementRootParentMatrix = FacePlaneUtil.GetParentModelMatrix(alignFacesMovementRoot);
+            Matrix4x4 movementRootParentMatrix = FacePlaneUtil.GetParentModelMatrix(movementRoot);
             movementRootParentMatrix.SetColumn(3, new Vector4(0, 0, 0, 1));
             Vector3 localDelta = movementRootParentMatrix.inverse.MultiplyVector(worldTranslation);
 
             TaskAddToElementPosition task = new TaskAddToElementPosition(
-                alignFacesMovementRoot, alignFacesMovementRoot.From, alignFacesMovementRoot.To, alignFacesMovementRoot.RotationOrigin,
+                movementRoot, movementRoot.From, movementRoot.To, movementRoot.RotationOrigin,
                 new double[] { localDelta.x, localDelta.y, localDelta.z }, 0, true);
             task.DoTask();
             UndoManager.main.CommitTask(task);
 
-            objectSelector.SelectObject(alignFacesMovementRoot.gameObject.gameObject, false, false);
+            objectSelector.SelectObject(movementRoot.gameObject.gameObject, false, false);
             InfoLogger.main.LogText("Align Faces: aligned");
         }
 
