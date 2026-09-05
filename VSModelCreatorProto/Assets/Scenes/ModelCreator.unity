@@ -108749,6 +108749,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   menubarChildMenu: {fileID: 380899111}
+  openOnHover: 0
 --- !u!1001 &1855807674
 PrefabInstance:
   m_ObjectHideFlags: 0
