@@ -12,23 +12,23 @@ There is also an [`extended-tools`](https://github.com/f0WLer/vsmc2/tree/extende
 
 ### Name Children
 
-Adds **Tools > Name Children**.
+Adds **Selection > Name Children**.
 
 Automatically renames and sequentially numbers the direct children of the currently selected element (i.e "`<ParentName>`*`N`*"), making larger element hierarchies easier to organize and manage.
 
-**Branch:** [`tools-name-children`](https://github.com/f0WLer/vsmc2/tree/tools-name-children)
+**Branch:** [`batch-name-children`](https://github.com/f0WLer/vsmc2/tree/batch-name-children)
 
 Clone and try it:
 
 ```bash
-git clone -b tools-name-children https://github.com/f0WLer/vsmc2.git
+git clone -b batch-name-children https://github.com/f0WLer/vsmc2.git
 ```
 
 ------
 
 ### True Mirroring
 
-Adds true geometric **X/Y/Z mirroring** for an element and its complete child hierarchy.
+Adds **Selection > Mirror Across Axis > X/Y/Z**, a true geometric mirror for an element and its complete child hierarchy.
 
 Unlike the common workaround of parenting geometry to an element at the model origin and rotating it 180°, this performs an actual reflection. This allows asymmetric geometry to properly mirror rather than merely rotating to the opposite side.
 
@@ -46,7 +46,7 @@ git clone -b true-mirroring https://github.com/f0WLer/vsmc2.git
 
 ### Align Faces
 
-Adds **Tools > Align Faces**.
+Adds **Selection > Align Faces**.
 
 Select a source face and a parallel target face. The source element is translated only in the direction necessary to make the two selected face planes coincide.
 
