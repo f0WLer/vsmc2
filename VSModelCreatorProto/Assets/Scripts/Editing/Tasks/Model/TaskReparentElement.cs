@@ -211,7 +211,7 @@ namespace VSMC
             return "Reparent Element";
         }
 
-        Vector3 ExtractEulerXYZ(Matrix4x4 m)
+        public static Vector3 ExtractEulerXYZ(Matrix4x4 m)
         {
             Vector3 rot = new Vector3();
             Matrix4x4 n = m.transpose;

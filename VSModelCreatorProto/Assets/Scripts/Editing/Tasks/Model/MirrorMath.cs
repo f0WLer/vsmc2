@@ -63,7 +63,7 @@ namespace VSMC
 
             Matrix4x4 rotationOnly = newLocalRaw;
             rotationOnly.SetColumn(3, new Vector4(0, 0, 0, 1));
-            Vector3 eulerNew = ExtractEulerXYZ(rotationOnly);
+            Vector3 eulerNew = TaskReparentElement.ExtractEulerXYZ(rotationOnly);
 
             // The element's local matrix is T(origin) * R * T(-origin) * T(From), whose translation column
             // is origin + R*(From - origin) - solve that for From.
@@ -71,7 +71,7 @@ namespace VSMC
             Vector3 newFrom = newOrigin + (Vector3)(rotationOnly.inverse.MultiplyPoint3x4(tNewActual - newOrigin));
 
             elem.RotationOrigin = new double[] { newOrigin.x, newOrigin.y, newOrigin.z };
-            // Matches TaskReparentElement.ExtractEulerXYZ's established sign convention for this codebase.
+            // The element rotation fields store these negated, same convention TaskReparentElement uses.
             elem.RotationX = -eulerNew.x;
             elem.RotationY = -eulerNew.y;
             elem.RotationZ = -eulerNew.z;
@@ -79,9 +79,10 @@ namespace VSMC
             elem.To = new double[] { newFrom.x + size.x, newFrom.y + size.y, newFrom.z + size.z };
 
             // The local flip above puts the +X face on -X, so East and West trade places.
-            if (elem.FacesResolved != null && elem.FacesResolved.Length == 6)
+            if (elem.FacesResolved != null && elem.FacesResolved.Length == BlockFacing.ALLFACES.Length)
             {
-                (elem.FacesResolved[1], elem.FacesResolved[3]) = (elem.FacesResolved[3], elem.FacesResolved[1]);
+                (elem.FacesResolved[(int)FaceEnum.East], elem.FacesResolved[(int)FaceEnum.West]) =
+                    (elem.FacesResolved[(int)FaceEnum.West], elem.FacesResolved[(int)FaceEnum.East]);
 
                 // Every face comes out with its U axis reversed - the four that map U to local X directly,
                 // and East/West via the swap above, since their CubeUvCoords corner layouts run opposite
@@ -112,6 +113,8 @@ namespace VSMC
 
         static void MirrorSubtreeInPlaceRecursive(ShapeElement elem, Matrix4x4 parentWorldOrig, Matrix4x4 parentWorldNew, Matrix4x4 reflect)
         {
+            // worldOrig has to be read before MirrorElementInPlace mutates elem - the children need the
+            // pre-mirror frame as their parentWorldOrig.
             Matrix4x4 worldOrig = parentWorldOrig * elem.ApplyTransform(Matrix4x4.identity);
             Matrix4x4 worldNew = MirrorElementInPlace(elem, parentWorldOrig, parentWorldNew, reflect);
 
@@ -124,36 +127,5 @@ namespace VSMC
             }
         }
 
-        /// <summary>
-        /// Decomposes a rotation matrix into the RotationX/Y/Z Euler triple this codebase's element
-        /// rotation fields expect. Duplicated from TaskReparentElement.ExtractEulerXYZ (kept private there)
-        /// rather than changing that method's visibility for this feature.
-        /// </summary>
-        public static Vector3 ExtractEulerXYZ(Matrix4x4 m)
-        {
-            Vector3 rot = new Vector3();
-            Matrix4x4 n = m.transpose;
-            Quaternion q = Quaternion.LookRotation(n.GetColumn(2), n.GetColumn(1));
-
-            float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
-            float cosr_cosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
-            rot.x = Mathf.Atan2(sinr_cosp, cosr_cosp);
-
-            float sinp = 2.0f * (q.w * q.y - q.z * q.x);
-            if (Mathf.Abs(sinp) >= 1)
-            {
-                rot.y = Mathf.PI / 2 * Mathf.Sign(sinp);
-            }
-            else
-            {
-                rot.y = Mathf.Asin(sinp);
-            }
-
-            float siny_cosp = 2.0f * (q.w * q.z + q.x * q.y);
-            float cosy_cosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
-            rot.z = Mathf.Atan2(siny_cosp, cosy_cosp);
-
-            return rot * Mathf.Rad2Deg;
-        }
     }
 }

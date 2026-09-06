@@ -19,13 +19,13 @@ namespace VSMC
             createdElement = toMirror.CopyThisElement();
             copyUID = toMirror.elementUID;
 
+            // GetParentPath is empty for a root and walks stepparents as well as parents, so it needs no
+            // guard, and guarding on ParentElement would skip a stepparented root's real chain, leaving
+            // the reflection to be computed in the wrong frame.
             Matrix4x4 parentWorld = Matrix4x4.identity;
-            if (toMirror.ParentElement != null)
+            foreach (ShapeElement pathElem in toMirror.GetParentPath())
             {
-                foreach (ShapeElement pathElem in toMirror.GetParentPath())
-                {
-                    parentWorld = pathElem.ApplyTransform(parentWorld);
-                }
+                parentWorld = pathElem.ApplyTransform(parentWorld);
             }
 
             // Mirror the copy's FacesResolved directly (face slot swaps, UV flips) rather than re-resolving
