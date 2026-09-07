@@ -3507,7 +3507,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4349310574475667174, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_text
-      value: Mirror (Z-axis)
+      value: Z-Axis
       objectReference: {fileID: 0}
     - target: {fileID: 4473237366991296537, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_Sprite
@@ -13294,7 +13294,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4349310574475667174, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_text
-      value: Mirror (Y-axis)
+      value: Y-Axis
       objectReference: {fileID: 0}
     - target: {fileID: 4473237366991296537, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_Sprite
@@ -80308,7 +80308,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4349310574475667174, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_text
-      value: Mirror (X-axis)
+      value: X-Axis
       objectReference: {fileID: 0}
     - target: {fileID: 4473237366991296537, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_Sprite
@@ -109113,7 +109113,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4349310574475667174, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_text
-      value: 'Mirror Across:'
+      value: Mirror Across
       objectReference: {fileID: 0}
     - target: {fileID: 4473237366991296537, guid: fe73ff444fa12a5028f469d8a9271a18, type: 3}
       propertyPath: m_Sprite
