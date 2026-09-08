@@ -368,7 +368,7 @@ namespace VSMC
 
         public void ResolveForBeforeSerialization()
         {
-            editor.editorVersion = "VSMC2v" + Application.version;
+            editor.editorVersion = Application.productName+"v" + Application.version;
             foreach (ShapeElement elem in Elements)
             {
                 elem.ResolveBeforeSerialization();
